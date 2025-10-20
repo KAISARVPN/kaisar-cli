@@ -1,5 +1,6 @@
 import sys
 import json
+import os
 from datetime import datetime
 import time
 from dotenv import load_dotenv
@@ -10,6 +11,8 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.status import Status
 from rich.padding import Padding
+from rich.table import Table # <-- TAMBAHAN
+from rich import box 
 
 # Inisialisasi console Rich
 console = Console()
@@ -28,24 +31,25 @@ from app.menus.hot import show_hot_menu, show_hot_menu2
 from app.service.sentry import enter_sentry_mode
 from app.menus.purchase import purchase_by_family
 
-WIDTH = 55 # Variabel ini mungkin tidak terlalu relevan lagi dengan Panel
+WIDTH = 55
+USERS_DB_PATH = "db/users.json" # <-- Path ke database user
 
 def show_main_menu(profile):
     clear_screen()
     
     # 1. Banner "KAISAR Cli"
     banner_text = Text("KAISAR Cli", style="bold bright_cyan", justify="center")
-    console.print(Panel(banner_text, style="blue", padding=(1, 0)))
-    console.print() # Spasi
+    console.print(Panel(banner_text, style="blue", padding=(1, 0), box=box.ASCII))
+    console.print() 
 
     # 2. Panel Profil
     expired_at_dt = datetime.fromtimestamp(profile["balance_expired_at"]).strftime("%Y-%m-%d")
     profile_text = (
         f"Nomor: [bold yellow]{profile['number']}[/] | Type: [bold]{profile['subscription_type']}[/]\n"
         f"Pulsa: [bold green]Rp {profile['balance']}[/] | Aktif sampai: [cyan]{expired_at_dt}[/]\n"
-        f"[italic dim]{profile['point_info']}[/italic dim]" # <-- PERBAIKAN ADA DI BARIS INI
+        f"[italic dim]{profile['point_info']}[/italic dim]"
     )
-    console.print(Panel(profile_text, title="[bold]Profil Akun[/]", title_align="left", border_style="green"))
+    console.print(Panel(profile_text, title="[bold]Profil Akun[/]", title_align="left", border_style="green", box=box.ASCII))
 
     # 3. Panel Menu
     menu_text = (
@@ -57,10 +61,178 @@ def show_main_menu(profile):
         "[bold cyan]6.[/] Riwayat Transaksi\n"
         "[bold yellow]7.[/] Purchase all packages in a family code\n"
         "[bold magenta]00.[/] Bookmark Paket\n"
+        "[bold yellow]88.[/] Admin Menu\n"
         "[bold default]------------------------------------[/]\n"
         "[bold red]99.[/] Tutup aplikasi"
     )
-    console.print(Panel(menu_text, title="[bold]Menu Utama[/]", title_align="left", border_style="cyan"))
+    console.print(Panel(menu_text, title="[bold]Menu Utama[/]", title_align="left", border_style="cyan", box=box.ASCII))
+
+
+# --- FUNGSI ADMIN MENU (DIPERBARUI) ---
+def show_admin_menu():
+    clear_screen()
+    
+    # 1. Dapatkan password dari environment variable
+    ADMIN_PASS = os.getenv("ADMIN_PASSWORD")
+    
+    if not ADMIN_PASS:
+        console.print(Panel("[bold red]Fitur Admin belum dikonfigurasi.[/]\nSilakan atur 'ADMIN_PASSWORD' di file .env Anda.", title="Error", box=box.ASCII, border_style="red"))
+        pause()
+        return
+
+    # 2. Minta password (tersembunyi)
+    password = console.input("[bold]Masukkan Password Admin: [/]", password=True)
+    
+    if password != ADMIN_PASS:
+        console.print("[bold red]Password salah![/]")
+        pause()
+        return
+        
+    # 3. Tampilkan menu admin jika password benar
+    while True:
+        clear_screen()
+        admin_banner = Text("ADMIN MENU", style="bold yellow", justify="center")
+        console.print(Panel(admin_banner, style="red", box=box.ASCII))
+        
+        admin_menu_text = (
+            "[bold cyan]1.[/] Masuk Sentry Mode (s)\n"
+            "[bold cyan]2.[/] Test Get Package (t)\n"
+            "[bold cyan]3.[/] Lihat Daftar User\n"
+            "[bold cyan]4.[/] Hapus User\n"
+            "[bold cyan]5.[/] Lihat Konfigurasi (.env)\n"
+            "[bold red]99.[/] Kembali ke Menu Utama"
+        )
+        console.print(Panel(admin_menu_text, title="Opsi Admin", box=box.ASCII, border_style="yellow"))
+        
+        admin_choice = console.input("[bold]Pilih menu admin: [/]")
+        
+        if admin_choice == "1":
+            # --- Masuk Sentry Mode ---
+            active_user = AuthInstance.get_active_user()
+            if not active_user:
+                console.print("[red]Silakan login terlebih dahulu.[/]")
+                pause()
+                continue
+            
+            console.print("[bold yellow]Memasuki Sentry Mode...[/]")
+            with console.status("[bold red]Entering sentry mode...[/]", spinner="dots"):
+                enter_sentry_mode()
+            pause()
+
+        elif admin_choice == "2":
+            # --- Test Get Package ---
+            active_user = AuthInstance.get_active_user()
+            if not active_user:
+                console.print("[red]Silakan login terlebih dahulu.[/]")
+                pause()
+                continue
+
+            console.print("[bold yellow]Menjalankan Test Get Package...[/]")
+            with console.status("[bold green]Fetching package...[/]", spinner="arrow3"):
+                res = get_package(
+                    AuthInstance.api_key,
+                    active_user["tokens"],
+                    ""
+                )
+            console.print_json(json.dumps(res))
+            pause()
+
+        elif admin_choice == "3":
+            # --- Lihat Daftar User ---
+            console.print("[bold yellow]Membaca daftar user...[/]")
+            try:
+                with open(USERS_DB_PATH, 'r') as f:
+                    users = json.load(f)
+                
+                table = Table(title="Daftar User Tersimpan", box=box.ASCII)
+                table.add_column("No.", style="cyan")
+                table.add_column("Nomor HP", style="magenta")
+                
+                if not users:
+                    console.print("[yellow]Belum ada user tersimpan.[/]")
+                else:
+                    for i, user in enumerate(users):
+                        table.add_row(str(i + 1), user['number'])
+                    console.print(table)
+                    
+            except FileNotFoundError:
+                console.print(f"[red]File user tidak ditemukan di {USERS_DB_PATH}[/]")
+            except json.JSONDecodeError:
+                console.print(f"[red]Error membaca file JSON. File mungkin rusak.[/]")
+            except Exception as e:
+                console.print(f"[red]Terjadi error: {e}[/]")
+            pause()
+
+        elif admin_choice == "4":
+            # --- Hapus User ---
+            console.print("[bold yellow]Membaca daftar user...[/]")
+            try:
+                with open(USERS_DB_PATH, 'r') as f:
+                    users = json.load(f)
+                
+                if not users:
+                    console.print("[yellow]Belum ada user untuk dihapus.[/]")
+                    pause()
+                    continue
+
+                table = Table(title="Pilih User untuk Dihapus", box=box.ASCII)
+                table.add_column("No.", style="cyan")
+                table.add_column("Nomor HP", style="magenta")
+                
+                for i, user in enumerate(users):
+                    table.add_row(str(i + 1), user['number'])
+                console.print(table)
+                
+                choice_str = console.input("[bold]Masukkan nomor urut user yang akan dihapus (atau '99' untuk batal): [/]")
+                
+                if choice_str == '99':
+                    continue
+                    
+                choice_idx = int(choice_str) - 1
+                
+                if 0 <= choice_idx < len(users):
+                    removed_user = users.pop(choice_idx)
+                    with open(USERS_DB_PATH, 'w') as f:
+                        json.dump(users, f, indent=2)
+                    console.print(f"[green]User {removed_user['number']} berhasil dihapus.[/]")
+                else:
+                    console.print("[red]Pilihan tidak valid.[/]")
+                    
+            except FileNotFoundError:
+                console.print(f"[red]File user tidak ditemukan di {USERS_DB_PATH}[/]")
+            except ValueError:
+                console.print("[red]Input tidak valid. Harap masukkan angka.[/]")
+            except Exception as e:
+                console.print(f"[red]Terjadi error: {e}[/]")
+            pause()
+
+        elif admin_choice == "5":
+            # --- Lihat Konfigurasi ---
+            console.print("[bold yellow]Membaca Konfigurasi (.env)...[/]")
+            
+            api_key = os.getenv("API_KEY", "Tidak di-set")
+            admin_pass = os.getenv("ADMIN_PASSWORD", "Tidak di-set")
+            
+            # Sensor password
+            censored_pass = "Tidak di-set"
+            if admin_pass != "Tidak di-set":
+                censored_pass = (admin_pass[0] + "*" * (len(admin_pass) - 2) + admin_pass[-1]) if len(admin_pass) > 2 else admin_pass
+                
+            config_text = (
+                f"[cyan]API_KEY:[/]\n[dim]{api_key}[/dim]\n\n"
+                f"[cyan]ADMIN_PASSWORD:[/]\n[dim]{censored_pass}[/dim]"
+            )
+            console.print(Panel(config_text, title="Konfigurasi Aktif", box=box.ASCII, border_style="yellow"))
+            pause()
+
+
+        elif admin_choice == "99":
+            console.print("[yellow]Kembali ke menu utama...[/]")
+            break
+        else:
+            console.print("[red]Pilihan tidak valid.[/]")
+            pause()
+# --- AKHIR FUNGSI ADMIN ---
 
 
 show_menu = True
@@ -72,7 +244,7 @@ def main():
         # Logged in
         if active_user is not None:
             profile = {}
-            # Menggunakan status spinner untuk proses loading data
+            # Spinner untuk loading profile
             with console.status("[bold green]Mengambil data profile & balance...", spinner="dots8") as status:
                 try:
                     balance = get_balance(AuthInstance.api_key, active_user["tokens"]["id_token"])
@@ -99,7 +271,7 @@ def main():
                         "balance_expired_at": balance_expired_at,
                         "point_info": point_info
                     }
-                    time.sleep(0.5) # Sedikit jeda agar spinner terlihat
+                    time.sleep(0.5)
                     status.update("[bold green]Data berhasil dimuat![/]")
                 except Exception as e:
                     console.print(f"[bold red]Gagal memuat profil: {e}[/]")
@@ -116,25 +288,21 @@ def main():
                 else:
                     console.print("[yellow]Tidak ada user dipilih atau gagal memuat.[/]")
                 continue
+            
             elif choice == "2":
-                with console.status("[bold green]Mengambil data paket Anda...", spinner="arrow3"):
-                    fetch_my_packages()
+                fetch_my_packages()
                 continue
             elif choice == "3":
-                with console.status("[bold green]Memuat menu HOT...", spinner="arrow3"):
-                    show_hot_menu()
+                show_hot_menu()
             elif choice == "4":
-                with console.status("[bold green]Memuat menu HOT-2...", spinner="arrow3"):
-                    show_hot_menu2()
+                show_hot_menu2()
             elif choice == "5":
                 family_code = console.input("[bold]Enter family code (or '99' to cancel): [/]")
                 if family_code == "99":
                     continue
-                with console.status(f"[bold green]Mencari paket family: {family_code}...[/]", spinner="arrow3"):
-                    get_packages_by_family(family_code)
+                get_packages_by_family(family_code)
             elif choice == "6":
-                with console.status("[bold green]Memuat riwayat transaksi...", spinner="arrow3"):
-                    show_transaction_history(AuthInstance.api_key, active_user["tokens"])
+                show_transaction_history(AuthInstance.api_key, active_user["tokens"])
             elif choice == "7":
                 family_code = console.input("[bold]Enter family code (or '99' to cancel): [/]")
                 if family_code == "99":
@@ -154,7 +322,6 @@ def main():
                 except ValueError:
                     delay_seconds = 0
                 
-                # Spinner untuk proses pembelian
                 with console.status(f"[bold magenta]Memulai proses pembelian untuk family: {family_code}...[/]", spinner="line"):
                     purchase_by_family(
                         family_code,
@@ -164,30 +331,21 @@ def main():
                         start_from_option
                     )
             elif choice == "00":
-                with console.status("[bold green]Memuat menu bookmark...", spinner="arrow3"):
-                    show_bookmark_menu()
+                show_bookmark_menu()
+            
+            elif choice == "88":
+                show_admin_menu()
+
             elif choice == "99":
                 console.print("[bold yellow]Menutup aplikasi... Sampai jumpa![/]")
                 sys.exit(0)
-            elif choice == "t":
-                with console.status("[bold green]Fetching package...[/]", spinner="arrow3"):
-                    res = get_package(
-                        AuthInstance.api_key,
-                        active_user["tokens"],
-                        ""
-                    )
-                console.print_json(json.dumps(res))
-                pause()
-                pass
-            elif choice == "s":
-                with console.status("[bold red]Entering sentry mode...[/]", spinner="dots"):
-                    enter_sentry_mode()
+            
             else:
                 console.print("[bold red]Pilihan tidak valid. Silakan coba lagi.[/]")
                 pause()
         else:
             # Not logged in
-            console.print(Panel("[bold yellow]Anda belum login. Silakan pilih akun.[/]", title="Login Diperlukan"))
+            console.print(Panel("[bold yellow]Anda belum login. Silakan pilih akun.[/]", title="Login Diperlukan", box=box.ASCII))
             selected_user_number = show_account_menu()
             if selected_user_number:
                 AuthInstance.set_active_user(selected_user_number)
