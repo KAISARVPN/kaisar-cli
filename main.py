@@ -43,7 +43,7 @@ def show_main_menu(profile):
     profile_text = (
         f"Nomor: [bold yellow]{profile['number']}[/] | Type: [bold]{profile['subscription_type']}[/]\n"
         f"Pulsa: [bold green]Rp {profile['balance']}[/] | Aktif sampai: [cyan]{expired_at_dt}[/]\n"
-        f"[italic dim]{profile['point_info']}[/italic]"
+        f"[italic dim]{profile['point_info']}[/italic dim]" # <-- PERBAIKAN ADA DI BARIS INI
     )
     console.print(Panel(profile_text, title="[bold]Profil Akun[/]", title_align="left", border_style="green"))
 
@@ -123,7 +123,7 @@ def main():
             elif choice == "3":
                 with console.status("[bold green]Memuat menu HOT...", spinner="arrow3"):
                     show_hot_menu()
-            elif choice == "44":
+            elif choice == "4":
                 with console.status("[bold green]Memuat menu HOT-2...", spinner="arrow3"):
                     show_hot_menu2()
             elif choice == "5":
