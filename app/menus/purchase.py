@@ -1,4 +1,4 @@
-import requests, time
+import requests, time, os
 from random import randint
 from app.client.engsel import get_family, get_package_details
 # from app.menus.util import pause # Kita ganti dengan fungsi pause dari rich
@@ -68,6 +68,9 @@ def purchase_by_family(
         )
         
         balance_treshold = decoy_package_detail["package_option"]["price"]
+        
+        os.system('clear') # <--- PERBAIKAN: Bersihkan layar di sini
+        
         console.print(f"Pastikan sisa balance KURANG DARI [bold]Rp{balance_treshold}[/bold] ya!", style="bold yellow")
         balance_answer = console.input(Text("Apakah kamu yakin ingin melanjutkan pembelian? (y/n): ", style="bold cyan"))
         if balance_answer.lower() != "y":
@@ -303,6 +306,9 @@ def purchase_n_times(
         )
         
         balance_treshold = decoy_package_detail["package_option"]["price"]
+        
+        os.system('clear') # <--- PERBAIKAN: Bersihkan layar di sini
+        
         console.print(f"Pastikan sisa balance KURANG DARI [bold]Rp{balance_treshold}[/bold] ya!", style="bold yellow")
         balance_answer = console.input(Text("Apakah kamu yakin ingin melanjutkan pembelian? (y/n): ", style="bold cyan"))
         if balance_answer.lower() != "y":
@@ -489,4 +495,3 @@ def purchase_n_times(
     ))
     pause()
     return True
-
